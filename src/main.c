@@ -7,6 +7,9 @@
 #include <libopencm3/usb/usbd.h>
 #include <libopencm3/usb/hid.h>
 
+/* Function Prototypes */
+void sys_tick_handler(void);
+
 /* System Constants */
 #define SYSTEM_CLOCK_HZ 72000000
 #define SYSTICK_FREQUENCY_HZ 1000
@@ -239,15 +242,14 @@ static void update_gamepad_state(struct hid_report *report)
         }
         else
         {
-            /* Button state stable, increment counter */
             if (buttons[i].debounce_counter < DEBOUNCE_TIME_MS)
             {
+                /* Button state stable, increment counter */
                 buttons[i].debounce_counter++;
             }
-
-            /* If debounce time reached, update stable state */
-            if (buttons[i].debounce_counter >= DEBOUNCE_TIME_MS)
+            else
             {
+                /* If debounce time reached, update stable state */
                 buttons[i].state = button_raw;
             }
         }
@@ -313,7 +315,7 @@ static void update_gamepad_state(struct hid_report *report)
 }
 
 /* HID Control Request Handler */
-static enum usbd_request_return_codes hid_control_request(usbd_device *usbd_dev,
+static enum usbd_request_return_codes hid_control_request(usbd_device *dev,
                                                           struct usb_setup_data *req,
                                                           uint8_t **buf,
                                                           uint16_t *len,
@@ -321,7 +323,7 @@ static enum usbd_request_return_codes hid_control_request(usbd_device *usbd_dev,
                                                                             struct usb_setup_data *req))
 {
     (void)complete;
-    (void)usbd_dev;
+    (void)dev;
 
     if ((req->bmRequestType != 0x81) ||
         (req->bRequest != USB_REQ_GET_DESCRIPTOR) ||
@@ -336,14 +338,14 @@ static enum usbd_request_return_codes hid_control_request(usbd_device *usbd_dev,
 }
 
 /* USB Set Configuration Handler */
-static void hid_set_config(usbd_device *usbd_dev, uint16_t wValue)
+static void hid_set_config(usbd_device *dev, uint16_t wValue)
 {
     (void)wValue;
 
-    usbd_ep_setup(usbd_dev, 0x81, USB_ENDPOINT_ATTR_INTERRUPT, 2, NULL); /* 2-byte reports */
+    usbd_ep_setup(dev, 0x81, USB_ENDPOINT_ATTR_INTERRUPT, 2, NULL); /* 2-byte reports */
 
     usbd_register_control_callback(
-        usbd_dev,
+        dev,
         USB_REQ_TYPE_STANDARD | USB_REQ_TYPE_INTERFACE,
         USB_REQ_TYPE_TYPE | USB_REQ_TYPE_RECIPIENT,
         hid_control_request);
@@ -399,8 +401,8 @@ static void setup_systick(void)
 
 int main(void)
 {
-    /* Use basic clock setup first */
-    rcc_clock_setup_in_hse_8mhz_out_72mhz();
+    /* Setup 72MHz system clock using 8MHz external crystal */
+    rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
 
     /* Enable GPIOC clock for LED */
     rcc_periph_clock_enable(RCC_GPIOC);
