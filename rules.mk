@@ -140,18 +140,18 @@ $(BUILD_DIR)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(Q)$(CC) $(TGT_ASFLAGS) $(ASFLAGS) $(TGT_CPPFLAGS) $(CPPFLAGS) -o $@ -c $<
 
-$(PROJECT).elf: $(OBJS) $(LDSCRIPT) $(LIBDEPS)
+$(BUILD_DIR)/$(PROJECT).elf: $(OBJS) $(LDSCRIPT) $(LIBDEPS)
 	@printf "  LD\t$@\n"
 	$(Q)$(LD) $(TGT_LDFLAGS) $(LDFLAGS) $(OBJS) $(LDLIBS) -o $@
 
-%.bin: %.elf
+$(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	@printf "  OBJCOPY\t$@\n"
 	$(Q)$(OBJCOPY) -O binary  $< $@
 
-%.lss: %.elf
+$(BUILD_DIR)/%.lss: $(BUILD_DIR)/%.elf
 	$(OBJDUMP) -h -S $< > $@
 
-%.list: %.elf
+$(BUILD_DIR)/%.list: $(BUILD_DIR)/%.elf
 	$(OBJDUMP) -S $< > $@
 
 %.flash: %.elf

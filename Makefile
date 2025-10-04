@@ -1,26 +1,30 @@
-# Project Makefile
+PROJECT = dendy_joystick_usb
+BUILD_DIR = bin/
 
-# Binary base name
-BINARY = dendy_joystick_usb
+CFILES = src/main.c
 
-# Target MCU
 DEVICE = stm32f103c8t6
+OOCD_INTERFACE = stlink-v2
+OOCD_TARGET = stm32f1x
 
-# Source files
-SOURCES = src/main.c
+VPATH += $(SHARED_DIR)
+INCLUDES += $(patsubst %,-I%, . $(SHARED_DIR))
+OPENCM3_DIR = libopencm3/
+OPENCM3_LIB = opencm3_stm32f1
+OPENCM3_DEFS = -DSTM32F1
 
-# libopencm3 directory
-OPENCM3_DIR = libopencm3
+FP_FLAGS	?= -msoft-float
+ARCH_FLAGS	= -mthumb -mcpu=cortex-m3 $(FP_FLAGS) -mfix-cortex-m3-ldrd
 
-# Include the master build rules
 include $(OPENCM3_DIR)/mk/genlink-config.mk
 include rules.mk
 include $(OPENCM3_DIR)/mk/genlink-rules.mk
 
-# Flashing configuration
-OOCD_INTERFACE = stlink-v2
-OOCD_TARGET = stm32f1x
+bin: $(BUILD_DIR)/$(PROJECT).elf
+	$(Q)$(OBJCOPY) -O binary $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
 
-flash: $(BINARY).elf
-	openocd -f interface/$(OOCD_INTERFACE).cfg -f target/$(OOCD_TARGET).cfg \
-	-c "program $(BINARY).elf verify reset exit"
+st-flash:
+	st-flash write $(BUILD_DIR)/$(PROJECT).bin 0x8000000
+
+st-all: bin st-flash
+	@echo "Build and flash completed."
