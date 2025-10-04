@@ -103,7 +103,7 @@ static const struct usb_endpoint_descriptor hid_endpoint = {
     .bEndpointAddress = 0x81,
     .bmAttributes = USB_ENDPOINT_ATTR_INTERRUPT,
     .wMaxPacketSize = 2, /* 2 bytes for button report */
-    .bInterval = 10,
+    .bInterval = 1,      /* 1ms interval for maximum responsiveness */
 };
 
 /* HID Interface Descriptor */
@@ -213,10 +213,10 @@ static void update_gamepad_state(struct hid_report *report)
     uint8_t turbo_a_pressed = !gpio_get(GPIOB, BUTTON_TURBO_A_PIN);
     uint8_t turbo_b_pressed = !gpio_get(GPIOB, BUTTON_TURBO_B_PIN);
 
-    /* Update turbo counter (15Hz = ~67ms period, ~33ms on/off) */
+    /* Update turbo counter (15Hz = ~66ms period, ~33ms on/off) */
     turbo_counter++;
     if (turbo_counter >= 33)
-    { /* ~33ms at 1ms intervals */
+    { /* ~33ms at 1ms intervals for 15Hz turbo */
         turbo_counter = 0;
         turbo_state = !turbo_state;
     }
@@ -355,6 +355,10 @@ int main(void)
         .buttons = 0 /* No buttons pressed */
     };
 
+    struct hid_report last_report = {
+        .buttons = 0 /* Previous state */
+    };
+
     uint32_t last_report_time = 0;
 
     /* Main loop with full gamepad functionality */
@@ -370,13 +374,17 @@ int main(void)
             gpio_toggle(GPIOC, GPIO13);
         }
 
-        /* Send HID report every 20ms for responsive gaming (50Hz) */
-        if (system_millis - last_report_time >= 20)
+        /* Read current gamepad state every loop iteration */
+        update_gamepad_state(&report);
+
+        /* Send HID report immediately on state change OR every 5ms for turbo/keepalive */
+        uint8_t state_changed = (report.buttons != last_report.buttons);
+        uint8_t periodic_update = (system_millis - last_report_time >= 5);
+
+        if (state_changed || periodic_update)
         {
             last_report_time = system_millis;
-
-            /* Read current gamepad state */
-            update_gamepad_state(&report);
+            last_report = report;
 
             /* Send the report */
             send_hid_report(&report);
