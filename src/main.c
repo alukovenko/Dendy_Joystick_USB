@@ -26,16 +26,14 @@
 #define BUTTON_TURBO_B_PIN GPIO1 // PB1 - Turbo B
 
 /* Button bit positions in HID report - NES Controller Layout */
-#define BUTTON_A_BIT 0       // Button A
-#define BUTTON_B_BIT 1       // Button B
-#define BUTTON_SELECT_BIT 2  // Select
-#define BUTTON_START_BIT 3   // Start
-#define BUTTON_UP_BIT 4      // D-pad Up
-#define BUTTON_DOWN_BIT 5    // D-pad Down
-#define BUTTON_LEFT_BIT 6    // D-pad Left
-#define BUTTON_RIGHT_BIT 7   // D-pad Right
-#define BUTTON_TURBO_A_BIT 8 // Turbo A
-#define BUTTON_TURBO_B_BIT 9 // Turbo B
+#define BUTTON_A_BIT 0      // Button A
+#define BUTTON_B_BIT 1      // Button B
+#define BUTTON_SELECT_BIT 2 // Select
+#define BUTTON_START_BIT 3  // Start
+#define BUTTON_UP_BIT 4     // D-pad Up
+#define BUTTON_DOWN_BIT 5   // D-pad Down
+#define BUTTON_LEFT_BIT 6   // D-pad Left
+#define BUTTON_RIGHT_BIT 7  // D-pad Right
 
 /* HID Report Descriptor for Gamepad with Digital Buttons Only */
 static const uint8_t hid_report_descriptor[] = {
@@ -43,18 +41,18 @@ static const uint8_t hid_report_descriptor[] = {
     0x09, 0x05, // Usage (Game Pad)
     0xA1, 0x01, // Collection (Application)
 
-    // Button Report (10 buttons)
+    // Button Report (8 buttons)
     0x05, 0x09, //   Usage Page (Button)
     0x19, 0x01, //   Usage Minimum (Button 1)
-    0x29, 0x0A, //   Usage Maximum (Button 10)
+    0x29, 0x08, //   Usage Maximum (Button 8)
     0x15, 0x00, //   Logical Minimum (0)
     0x25, 0x01, //   Logical Maximum (1)
     0x75, 0x01, //   Report Size (1 bit)
-    0x95, 0x0A, //   Report Count (10 buttons)
+    0x95, 0x08, //   Report Count (8 buttons)
     0x81, 0x02, //   Input (Data,Var,Abs)
 
     // Padding for button byte alignment
-    0x75, 0x06, //   Report Size (6 bits)
+    0x75, 0x08, //   Report Size (8 bits)
     0x95, 0x01, //   Report Count (1)
     0x81, 0x03, //   Input (Const,Var,Abs) - padding
 
@@ -64,7 +62,7 @@ static const uint8_t hid_report_descriptor[] = {
 /* HID Report Structure - Buttons Only */
 struct hid_report
 {
-    uint16_t buttons; // Button bits (10 buttons + 6 bits padding)
+    uint16_t buttons; // Button bits (8 buttons + 8 bits padding)
 } __attribute__((packed));
 
 /* USB Device Descriptor */
@@ -155,8 +153,9 @@ static usbd_device *usbd_dev;
 static uint8_t usbd_control_buffer[128];
 
 /* Turbo timing variables */
-static uint32_t turbo_counter = 0;
-static uint8_t turbo_state = 0; // For 15Hz turbo timing
+static uint32_t turbo_counters[2] = {0, 0}; // [0] = Turbo A, [1] = Turbo B
+static uint8_t turbo_states[2] = {0, 0};    // Current turbo output states
+static uint8_t turbo_prev[2] = {0, 0};      // Previous button states for edge detection
 
 /* Setup GPIO pins for buttons */
 static void setup_gpio(void)
@@ -210,34 +209,49 @@ static void update_gamepad_state(struct hid_report *report)
         buttons |= (1 << BUTTON_START_BIT);
 
     /* Handle turbo buttons with 15Hz rate */
-    uint8_t turbo_a_pressed = !gpio_get(GPIOB, BUTTON_TURBO_A_PIN);
-    uint8_t turbo_b_pressed = !gpio_get(GPIOB, BUTTON_TURBO_B_PIN);
+    uint8_t turbo_pressed[2] = {
+        !gpio_get(GPIOB, BUTTON_TURBO_A_PIN), // [0] = Turbo A
+        !gpio_get(GPIOB, BUTTON_TURBO_B_PIN)  // [1] = Turbo B
+    };
 
-    /* Update turbo counter (15Hz = ~66ms period, ~33ms on/off) */
-    turbo_counter++;
-    if (turbo_counter >= 33)
-    { /* ~33ms at 1ms intervals for 15Hz turbo */
-        turbo_counter = 0;
-        turbo_state = !turbo_state;
-    }
+    uint8_t turbo_button_bits[2] = {BUTTON_A_BIT, BUTTON_B_BIT};
 
-    /* Apply turbo effect */
-    if (turbo_a_pressed)
+    /* Process each turbo button */
+    for (int i = 0; i < 2; i++)
     {
-        if (turbo_state)
+        if (turbo_pressed[i])
         {
-            buttons |= (1 << BUTTON_A_BIT); /* Turbo A activates Button A */
-        }
-        buttons |= (1 << BUTTON_TURBO_A_BIT); /* Also set turbo A bit */
-    }
+            /* First press detection - fire immediately */
+            if (!turbo_prev[i])
+            {
+                turbo_counters[i] = 0;
+                turbo_states[i] = 1; /* Start with button pressed */
+            }
+            else
+            {
+                /* Continue turbo timing */
+                turbo_counters[i]++;
+                if (turbo_counters[i] >= 33)
+                { /* ~33ms at 1ms intervals for 15Hz turbo */
+                    turbo_counters[i] = 0;
+                    turbo_states[i] = !turbo_states[i];
+                }
+            }
 
-    if (turbo_b_pressed)
-    {
-        if (turbo_state)
-        {
-            buttons |= (1 << BUTTON_B_BIT); /* Turbo B activates Button B */
+            if (turbo_states[i])
+            {
+                buttons |= (1 << turbo_button_bits[i]);
+            }
         }
-        buttons |= (1 << BUTTON_TURBO_B_BIT); /* Also set turbo B bit */
+        else
+        {
+            /* Reset turbo state when button is released */
+            turbo_counters[i] = 0;
+            turbo_states[i] = 0;
+        }
+
+        /* Update previous button state for edge detection */
+        turbo_prev[i] = turbo_pressed[i];
     }
 
     /* Update report */
