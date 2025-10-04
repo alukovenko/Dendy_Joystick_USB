@@ -1,7 +1,5 @@
 #include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <libopencm3/cm3/nvic.h>
+#include <stddef.h>
 #include <libopencm3/cm3/systick.h>
 #include <libopencm3/stm32/f1/rcc.h>
 #include <libopencm3/stm32/f1/gpio.h>
@@ -9,7 +7,13 @@
 #include <libopencm3/usb/usbd.h>
 #include <libopencm3/usb/hid.h>
 
-/* USB Device Descriptors */
+/* System Constants */
+#define SYSTEM_CLOCK_HZ 72000000
+#define SYSTICK_FREQUENCY_HZ 1000
+#define LED_TOGGLE_INTERVAL_MS 1000
+#define USB_CONTROL_BUFFER_SIZE 128
+
+/* USB Device Descriptors - using pid.codes VID/PID */
 #define USB_VID 0x1209
 #define USB_PID 0x0001
 
@@ -150,7 +154,7 @@ static const char *usb_strings[] = {
 static usbd_device *usbd_dev;
 
 /* USB Control Buffer */
-static uint8_t usbd_control_buffer[128];
+static uint8_t usbd_control_buffer[USB_CONTROL_BUFFER_SIZE];
 
 /* Turbo timing variables */
 static uint32_t turbo_counters[2] = {0, 0}; // [0] = Turbo A, [1] = Turbo B
@@ -376,8 +380,8 @@ void sys_tick_handler(void)
 {
     system_millis++;
 
-    /* Toggle LED every 100ms for debugging */
-    if (system_millis % 100 == 0)
+    /* Toggle LED for status indication */
+    if (system_millis % LED_TOGGLE_INTERVAL_MS == 0)
     {
         led_toggle_flag = 1;
     }
@@ -387,7 +391,7 @@ static void setup_systick(void)
 {
     /* Setup SysTick to fire every 1ms for precise timing */
     /* Using 72MHz system clock with external crystal */
-    systick_set_reload(72000000 / 1000 - 1); /* 1ms = 1000Hz */
+    systick_set_reload(SYSTEM_CLOCK_HZ / SYSTICK_FREQUENCY_HZ - 1);
     systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
     systick_counter_enable();
     systick_interrupt_enable();
@@ -405,13 +409,13 @@ int main(void)
     gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ,
                   GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
 
-    /* Test: Add back SysTick */
+    /* Initialize system timing */
     setup_systick();
 
-    /* Test: Add back GPIO setup for gamepad */
+    /* Initialize gamepad GPIO */
     setup_gpio();
 
-    /* Test: Add back USB initialization */
+    /* Initialize USB HID device */
     usb_setup();
 
     /* Initialize HID report */
