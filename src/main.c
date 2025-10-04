@@ -303,29 +303,6 @@ static void send_hid_report(struct hid_report *report)
     usbd_ep_write_packet(usbd_dev, 0x81, report, sizeof(struct hid_report));
 }
 
-/*
-Bluepill board based on STM32F103C8T6 microcontroller. The project implements
-a USB HID device using libopencm3 that simulates a gamepad with the following buttons:
-
-DPad Up	          PA0	            BUTTON_UP_PIN
-DPad Down	        PA1	            BUTTON_DOWN_PIN
-DPad Left	        PA2	            BUTTON_LEFT_PIN
-DPad Right	      PA3	            BUTTON_RIGHT_PIN
-Select	          PA4	            BUTTON_SELECT_PIN
-Start	            PA5	            BUTTON_START_PIN
-Button A	        PA6	            BUTTON_A_PIN
-Button B	        PA7	            BUTTON_B_PIN
-Turbo A	          PB0	            BUTTON_TURBO_A_PIN
-Turbo B	          PB1	            BUTTON_TURBO_B_PIN
-
-COMMON GROUND G GND Connect to any GND pin on BluePill
-
-All buttons should connect to GND when pressed (active low configuration), and require internal pull-up resistors to function correctly.
-
-Turbo A and Turbo B buttons are "rapid fire" buttons. When held down, they
-simulate repeated presses of Button A and Button B respectively at 15 Hz.
-*/
-
 /* Timing variables */
 static volatile uint32_t system_millis = 0;
 static volatile uint8_t led_toggle_flag = 0;
