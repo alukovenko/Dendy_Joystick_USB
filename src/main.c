@@ -5,19 +5,24 @@
 #include <libopencm3/cm3/systick.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
-#include <libopencm3/usb/usbd.h>
-#include <libopencm3/usb/hid.h>
-#include <libopencm3/stm32/rcc.h>
-#include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/f1/rcc.h>
+#include <libopencm3/stm32/f1/gpio.h>
+#include <libopencm3/stm32/f1/memorymap.h>
 
-#define DELAY_COUNT 500000
-
-static void delay(uint32_t count)
+/* SysTick interrupt handler */
+void sys_tick_handler(void)
 {
-    for (uint32_t i = 0; i < count; i++)
-    {
-        __asm__("nop");
-    }
+    gpio_toggle(GPIOC, GPIO13);
+}
+
+static void setup_systick(void)
+{
+    /* Setup SysTick to fire every 500ms */
+    /* Assuming 72MHz system clock (default for STM32F103) */
+    systick_set_reload(72000000 / 2 - 1); /* 500ms = 0.5Hz */
+    systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
+    systick_counter_enable();
+    systick_interrupt_enable();
 }
 
 int main(void)
@@ -29,10 +34,13 @@ int main(void)
     gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ,
                   GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
 
+    /* Setup SysTick timer for LED blinking */
+    setup_systick();
+
+    /* Main loop - now empty as LED is controlled by timer interrupt */
     while (1)
     {
-        gpio_toggle(GPIOC, GPIO13); // Toggle LED state
-        delay(DELAY_COUNT);         // Delay for ~500 ms
+        /* Could add other non-blocking tasks here */
     }
 
     return 0;
