@@ -157,6 +157,39 @@ static uint32_t turbo_counters[2] = {0, 0}; // [0] = Turbo A, [1] = Turbo B
 static uint8_t turbo_states[2] = {0, 0};    // Current turbo output states
 static uint8_t turbo_prev[2] = {0, 0};      // Previous button states for edge detection
 
+/* Debouncing variables */
+#define DEBOUNCE_TIME_MS 20   // 20ms debounce for cheap switches
+#define NUM_BUTTONS 10        // 8 regular buttons (PA0-PA7) + 2 turbo buttons (PB0-PB1)
+#define NUM_REGULAR_BUTTONS 8 // PA0-PA7
+#define NUM_TURBO_BUTTONS 2   // PB0-PB1
+
+/* Button state structure */
+struct button_state
+{
+    uint32_t port;            // GPIO port
+    uint16_t pin;             // GPIO pin
+    uint8_t bit;              // HID button bit (0xFF for turbo buttons)
+    uint8_t debounce_counter; // Debounce counter
+    uint8_t state;            // Stable debounced state
+    uint8_t raw_prev;         // Previous raw reading
+};
+
+/* Global button configuration and state */
+static struct button_state buttons[NUM_BUTTONS] = {
+    /* Regular buttons (0-7) */
+    {GPIOA, BUTTON_UP_PIN, BUTTON_UP_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_DOWN_PIN, BUTTON_DOWN_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_LEFT_PIN, BUTTON_LEFT_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_RIGHT_PIN, BUTTON_RIGHT_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_SELECT_PIN, BUTTON_SELECT_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_START_PIN, BUTTON_START_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_A_PIN, BUTTON_A_BIT, 0, 0, 0},
+    {GPIOA, BUTTON_B_PIN, BUTTON_B_BIT, 0, 0, 0},
+    /* Turbo buttons (8-9) - don't map to HID bits, just for debouncing */
+    {GPIOB, BUTTON_TURBO_A_PIN, 0xFF, 0, 0, 0}, // 0xFF = no HID bit
+    {GPIOB, BUTTON_TURBO_B_PIN, 0xFF, 0, 0, 0}  // 0xFF = no HID bit
+};
+
 /* Setup GPIO pins for buttons */
 static void setup_gpio(void)
 {
@@ -186,32 +219,49 @@ static void setup_gpio(void)
 /* Read button states and update HID report */
 static void update_gamepad_state(struct hid_report *report)
 {
-    uint16_t buttons = 0;
+    uint16_t hid_buttons = 0;
 
-    /* Read D-pad buttons */
-    if (!gpio_get(GPIOA, BUTTON_UP_PIN))
-        buttons |= (1 << BUTTON_UP_BIT);
-    if (!gpio_get(GPIOA, BUTTON_DOWN_PIN))
-        buttons |= (1 << BUTTON_DOWN_BIT);
-    if (!gpio_get(GPIOA, BUTTON_LEFT_PIN))
-        buttons |= (1 << BUTTON_LEFT_BIT);
-    if (!gpio_get(GPIOA, BUTTON_RIGHT_PIN))
-        buttons |= (1 << BUTTON_RIGHT_BIT);
+    /* Process debounced button readings */
+    for (int i = 0; i < NUM_BUTTONS; i++)
+    {
+        /* Read raw button state (active low) */
+        uint8_t button_raw = !gpio_get(buttons[i].port, buttons[i].pin);
 
-    /* Read action buttons */
-    if (!gpio_get(GPIOA, BUTTON_A_PIN))
-        buttons |= (1 << BUTTON_A_BIT);
-    if (!gpio_get(GPIOA, BUTTON_B_PIN))
-        buttons |= (1 << BUTTON_B_BIT);
-    if (!gpio_get(GPIOA, BUTTON_SELECT_PIN))
-        buttons |= (1 << BUTTON_SELECT_BIT);
-    if (!gpio_get(GPIOA, BUTTON_START_PIN))
-        buttons |= (1 << BUTTON_START_BIT);
+        /* Debounce logic */
+        if (button_raw != buttons[i].raw_prev)
+        {
+            /* Button state changed, start/reset debounce counter */
+            buttons[i].debounce_counter = 0;
+        }
+        else
+        {
+            /* Button state stable, increment counter */
+            if (buttons[i].debounce_counter < DEBOUNCE_TIME_MS)
+            {
+                buttons[i].debounce_counter++;
+            }
 
-    /* Handle turbo buttons with 15Hz rate */
+            /* If debounce time reached, update stable state */
+            if (buttons[i].debounce_counter >= DEBOUNCE_TIME_MS)
+            {
+                buttons[i].state = button_raw;
+            }
+        }
+
+        /* Apply debounced button state to HID report (only for regular buttons) */
+        if (i < NUM_REGULAR_BUTTONS && buttons[i].state && buttons[i].bit != 0xFF)
+        {
+            hid_buttons |= (1 << buttons[i].bit);
+        }
+
+        /* Store previous raw reading */
+        buttons[i].raw_prev = button_raw;
+    }
+
+    /* Handle turbo buttons with 15Hz rate - using debounced states */
     uint8_t turbo_pressed[2] = {
-        !gpio_get(GPIOB, BUTTON_TURBO_A_PIN), // [0] = Turbo A
-        !gpio_get(GPIOB, BUTTON_TURBO_B_PIN)  // [1] = Turbo B
+        buttons[8].state, // Turbo A (debounced)
+        buttons[9].state  // Turbo B (debounced)
     };
 
     uint8_t turbo_button_bits[2] = {BUTTON_A_BIT, BUTTON_B_BIT};
@@ -240,7 +290,7 @@ static void update_gamepad_state(struct hid_report *report)
 
             if (turbo_states[i])
             {
-                buttons |= (1 << turbo_button_bits[i]);
+                hid_buttons |= (1 << turbo_button_bits[i]);
             }
         }
         else
@@ -255,7 +305,7 @@ static void update_gamepad_state(struct hid_report *report)
     }
 
     /* Update report */
-    report->buttons = buttons;
+    report->buttons = hid_buttons;
 }
 
 /* HID Control Request Handler */
