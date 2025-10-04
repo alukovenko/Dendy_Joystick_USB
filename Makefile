@@ -23,8 +23,8 @@ include $(OPENCM3_DIR)/mk/genlink-rules.mk
 bin: $(BUILD_DIR)/$(PROJECT).elf
 	$(Q)$(OBJCOPY) -O binary $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
 
-st-flash:
+dendy_joystick_usb.flash:
 	st-flash write $(BUILD_DIR)/$(PROJECT).bin 0x8000000
 
-st-all: bin st-flash
+all: bin flash
 	@echo "Build and flash completed."

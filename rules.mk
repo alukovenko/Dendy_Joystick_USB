@@ -110,7 +110,7 @@ LDLIBS += -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
 %: s.%
 %: SCCS/s.%
 
-all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)$(PROJECT).bin
+all: $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).bin
 flash: $(PROJECT).flash
 
 # error if not using linker script generator
