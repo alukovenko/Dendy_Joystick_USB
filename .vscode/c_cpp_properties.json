@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "defines": [],
+            "compilerPath": "/usr/bin/arm-none-eabi-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/libopencm3/include",
+                "${workspaceFolder}/my-common-code"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/libopencm3/include",
+                    "${workspaceFolder}/my-common-code"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ],
+    "version": 4
+}
