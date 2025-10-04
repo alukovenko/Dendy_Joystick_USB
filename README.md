@@ -38,17 +38,16 @@ TODO: add photo
 4. Connect Bluepill to the joystick. TA and TB buttons on my joystick weren't wired to GND, which is not what we need here. Desolder the old chip, modify wiring on TA and TB buttons to follow the usual practice with GND. I am following this wiring:
 
 ```
-Joystick Function	Bluepill Pin	Firmware #define
-DPad Up	            PA0	            BUTTON_UP_PIN
+DPad Up	          PA0	            BUTTON_UP_PIN
 DPad Down	        PA1	            BUTTON_DOWN_PIN
 DPad Left	        PA2	            BUTTON_LEFT_PIN
-DPad Right	        PA3	            BUTTON_RIGHT_PIN
-Select	            PA4	            BUTTON_SELECT_PIN
+DPad Right	      PA3	            BUTTON_RIGHT_PIN
+Select	          PA4	            BUTTON_SELECT_PIN
 Start	            PA5	            BUTTON_START_PIN
 Button A	        PA6	            BUTTON_A_PIN
 Button B	        PA7	            BUTTON_B_PIN
-Turbo A	            PB0	            BUTTON_TURBO_A_PIN
-Turbo B	            PB1	            BUTTON_TURBO_B_PIN
+Turbo A	          PB0	            BUTTON_TURBO_A_PIN
+Turbo B	          PB1	            BUTTON_TURBO_B_PIN
 
 COMMON GROUND G GND Connect to any GND pin on BluePill
 ```
