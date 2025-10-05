@@ -273,20 +273,24 @@ static void update_gamepad_state(struct hid_report *report)
 
     uint8_t turbo_button_bits[2] = {BUTTON_A_BIT, BUTTON_B_BIT};
 
-    /* Process each turbo button */
+    /* Process each turbo button independently */
     for (int i = 0; i < 2; i++)
     {
+        /* Check for button state change first */
+        uint8_t button_changed = (turbo_pressed[i] != turbo_prev[i]);
+
         if (turbo_pressed[i])
         {
-            /* First press detection - fire immediately */
-            if (!turbo_prev[i])
+            /* Button is currently pressed */
+            if (button_changed)
             {
+                /* First press detection - fire immediately and reset timing */
                 turbo_counters[i] = 0;
                 turbo_states[i] = 1; /* Start with button pressed */
             }
             else
             {
-                /* Continue turbo timing */
+                /* Continue turbo timing - increment counter each iteration */
                 turbo_counters[i]++;
                 if (turbo_counters[i] >= 3)
                 { /* ~3 ticks at 10ms intervals = 30ms for ~16Hz turbo */
@@ -295,6 +299,7 @@ static void update_gamepad_state(struct hid_report *report)
                 }
             }
 
+            /* Apply turbo state to HID buttons */
             if (turbo_states[i])
             {
                 hid_buttons |= (1 << turbo_button_bits[i]);
@@ -302,7 +307,7 @@ static void update_gamepad_state(struct hid_report *report)
         }
         else
         {
-            /* Reset turbo state when button is released */
+            /* Button is released - always reset turbo state completely */
             turbo_counters[i] = 0;
             turbo_states[i] = 0;
         }
