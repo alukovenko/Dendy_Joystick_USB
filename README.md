@@ -1,36 +1,35 @@
-# Dendy Joystick with USB HID interface
+# Dendy Joystick with USB HID Interface
 
-Dendy was a Famiclone (a cartridge-compatible knock-off of an 8-bit NES Famicom) produced in 1990s for ex-USSR market. For many, it has a unique tactile feeling, which is hard to replace. I was unable to source any similarly-looking controllers with a USB HID interface, and I ended up getting one with the original DB-9 (serial) interface which is obviously not compatible with modern PCs and emulators.
+Dendy was a Famiclone (a cartridge-compatible knock-off of an 8-bit NES Famicom) produced in the 1990s for the ex-USSR market. For many, it has a unique tactile feeling, which is difficult to replicate. I was unable to source any similarly-looking controllers with a USB HID interface, and I ended up getting one with the original DB-9 (serial) interface which is obviously not compatible with modern PCs and emulators.
 
-There is already a number of projects that build USB HID interfaces for controllers. After trying out [FreeJoy](https://github.com/FreeJoy-Team/FreeJoy) I figured it is not currently possible to configure "Turbo A/B" buttons for rapid fire function, where these buttons should simulate pressing A/B buttons at a high speed (different sources claim 8 Hz, 15 Hz and 30 Hz, in this implementation I am going along with 15 Hz). This implementation builds onto [libopencm3](https://github.com/libopencm3/libopencm3) library instead.
+There are already a number of projects that build USB HID interfaces for controllers. After trying out [FreeJoy](https://github.com/FreeJoy-Team/FreeJoy) I figured it is not currently possible to configure "Turbo A/B" buttons for rapid fire function, where these buttons should simulate pressing A/B buttons at a high speed (different sources claim 8 Hz, 15 Hz and 30 Hz, in this implementation I am using 15 Hz). This implementation builds upon the [libopencm3](https://github.com/libopencm3/libopencm3) library instead.
 
-## What you will need
+## What You Will Need
 
 - Soldering iron, basic soldering skills
-- STM32 Bluepill (normally comes at $3 price range)
-- ST-Link v2 flash programmer (alternatively, you can use a serial adapter with bootloader, but it is not in-scope of this guide, and you are on your own)
+- STM32 BluePill (normally comes at $3 price range)
+- ST-Link v2 flash programmer (alternatively, you can use a serial adapter with bootloader, but it is not in scope of this guide, and you are on your own)
 - Joystick (gamepad) itself, doesn't have to fully work, because out of all the original internals we will only use the switches and the main PCB
 - Some fine wires
 - Micro-USB cable
 
 ## Operations
 
-1. Hardware modifications - fix the USB flaw
+1. **Hardware modifications - fix the USB flaw**
 
-Many, if not most BluePills come with incorrect R10 resistor which causes a variety of USB enumeration issues. R10 should be 1.5 KOhm, and if it measures 4.8 KOhm or 10 KOhm - you'd need to replace. Alternatively, if you only have 1.8K resistor - solder it in parallel with 10K to get `(10*1.8)/(10+1.8)=1.525` KOhm, which is good enough.
+Many, if not most BluePills come with an incorrect R10 resistor which causes a variety of USB enumeration issues. R10 should be 1.5 KOhm, and if it measures 4.8 KOhm or 10 KOhm - you'd need to replace it. Alternatively, if you only have a 1.8K resistor - solder it in parallel with 10K to get `(10*1.8)/(10+1.8)=1.525` KOhm, which is good enough.
 
-In my case I didn't have a proper SMD size, and I ended up with this workable solution:
+In my case I didn't have a proper SMD resistor size, and I ended up with this workable solution:
+![BluePill with resistor fix](img/bluepill.png)
 
-TODO: add photo
+2. **Connect ST-Link to the BluePill's 4-pin SWD header.** The connections are as follows:
 
-2. Connect ST-Link to the BluePill's 4-pin SWD header. The connections are as follows :
+- ST-Link SWCLK -> BluePill SWCLK (PA14)
+- ST-Link SWDIO -> BluePill SWDIO (PA13)
+- ST-Link GND -> BluePill G (GND)
+- ST-Link 3.3V -> BluePill 3.3
 
-   ST-Link SWCLK -> BluePill SWCLK (PA14)
-   ST-Link SWDIO -> BluePill SWDIO (PA13)
-   ST-Link GND -> BluePill G (GND)
-   ST-Link 3.3V -> BluePill 3.3
-
-3. Make sure BluePill is responsive:
+3. **Make sure BluePill is responsive.**
 
 ```
 $ st-info --probe
@@ -43,11 +42,17 @@ Found 1 stlink programmers
   dev-type:   STM32F1xx_MD
 ```
 
-Bluepills come with 64/128/256 KB flashes. This firmware is rather small, and will nicely fit into 64 KB.
+BluePills come with 64/128/256 KB flashes. This firmware is rather small, and will nicely fit into 64 KB.
 
-4. `make`
+4. **`make` will compile and flash the firmware**
 
-5. Connect Bluepill to the joystick. TA and TB buttons on my joystick are abnormal - the rest of the buttons are wired to GND and original chip pin, whereas TA/TB are connected both sides to the chip, which is not what we need here. Desolder the old chip, modify wiring on TA and TB buttons to follow the usual practice with GND. I am following this wiring, with 11 wires coming to the PCB:
+5. **Modify the joystick wiring.** The TA and TB buttons on my joystick have non-standard wiring - the rest of the buttons are wired to GND and original chip pin, whereas TA/TB are connected on both sides to the chip, which is not what we need here. Desolder the old chip, modify wiring on TA and TB buttons to follow the usual practice with GND.
+
+![Original PCB with modifications](img/pcb_modified.png)
+
+Note two cuts on the PCB to disconnect TA and TB
+
+6. **Connect BluePill to the joystick.** I am following this wiring, with 11 wires coming to the PCB:
 
 | Connection | Pin | Description        |
 | ---------- | --- | ------------------ |
@@ -63,6 +68,12 @@ Bluepills come with 64/128/256 KB flashes. This firmware is rather small, and wi
 | Turbo B    | PB1 | BUTTON_TURBO_B_PIN |
 | Ground     | GND | BluePill GND       |
 
+![BluePill wired](img/bluepill_connected.png)
+
+7. **To assemble** I had to make a few adjustments inside the original cover, but kept the looks:
+
+![Assembled Joystick](img/final_result.png)
+
 ## TODO
 
-Currently using VID/PID from pid.codes for test device, get a real PID/VID
+Currently using VID/PID from pid.codes for test device, get real PID/VID
