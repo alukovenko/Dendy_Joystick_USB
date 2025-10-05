@@ -9,6 +9,7 @@
 
 /* Function Prototypes */
 void sys_tick_handler(void);
+static void setup_systick(void);
 
 /* System Constants */
 #define SYSTEM_CLOCK_HZ 72000000
@@ -165,7 +166,7 @@ static uint8_t turbo_states[2] = {0, 0};    // Current turbo output states
 static uint8_t turbo_prev[2] = {0, 0};      // Previous button states for edge detection
 
 /* Debouncing variables */
-#define DEBOUNCE_TIME_MS 20   // 20ms debounce for cheap switches
+#define DEBOUNCE_TIME_TICKS 2 // 2 ticks * 10ms = 20ms debounce for cheap switches
 #define NUM_BUTTONS 10        // 8 regular buttons (PA0-PA7) + 2 turbo buttons (PB0-PB1)
 #define NUM_REGULAR_BUTTONS 8 // PA0-PA7
 #define NUM_TURBO_BUTTONS 2   // PB0-PB1
@@ -242,7 +243,7 @@ static void update_gamepad_state(struct hid_report *report)
         }
         else
         {
-            if (buttons[i].debounce_counter < DEBOUNCE_TIME_MS)
+            if (buttons[i].debounce_counter < DEBOUNCE_TIME_TICKS)
             {
                 /* Button state stable, increment counter */
                 buttons[i].debounce_counter++;
@@ -287,8 +288,8 @@ static void update_gamepad_state(struct hid_report *report)
             {
                 /* Continue turbo timing */
                 turbo_counters[i]++;
-                if (turbo_counters[i] >= 33)
-                { /* ~33ms at 1ms intervals for 15Hz turbo */
+                if (turbo_counters[i] >= 3)
+                { /* ~3 ticks at 10ms intervals = 30ms for ~16Hz turbo */
                     turbo_counters[i] = 0;
                     turbo_states[i] = !turbo_states[i];
                 }
@@ -349,6 +350,9 @@ static void hid_set_config(usbd_device *dev, uint16_t wValue)
         USB_REQ_TYPE_STANDARD | USB_REQ_TYPE_INTERFACE,
         USB_REQ_TYPE_TYPE | USB_REQ_TYPE_RECIPIENT,
         hid_control_request);
+
+    /* Setup SysTick after USB configuration is complete */
+    setup_systick();
 }
 
 /* Initialize USB */
@@ -357,8 +361,22 @@ static void usb_setup(void)
     rcc_periph_clock_enable(RCC_USB);
     rcc_periph_clock_enable(RCC_GPIOA);
 
-    /* USB pins PA11 and PA12 are handled automatically by USB peripheral */
-    /* Do not manually configure them */
+    /*
+     * This is a somewhat common cheap hack to trigger device re-enumeration
+     * on startup. Assuming a fixed external pullup on D+, (For USB-FS)
+     * setting the pin to output, and driving it explicitly low effectively
+     * "removes" the pullup. The subsequent USB init will "take over" the
+     * pin, and it will appear as a proper pullup to the host.
+     * The magic delay is somewhat arbitrary, no guarantees on USBIF
+     * compliance here, but "it works" in most places.
+     */
+    gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
+                  GPIO_CNF_OUTPUT_PUSHPULL, GPIO12);
+    gpio_clear(GPIOA, GPIO12);
+    for (unsigned i = 0; i < 800000; i++)
+    {
+        __asm__("nop");
+    }
 
     usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev_descr, &config,
                          usb_strings, 3, usbd_control_buffer,
@@ -380,10 +398,15 @@ static volatile uint8_t led_toggle_flag = 0;
 /* SysTick interrupt handler */
 void sys_tick_handler(void)
 {
-    system_millis++;
+    static uint32_t tick_counter = 0;
 
-    /* Toggle LED for status indication */
-    if (system_millis % LED_TOGGLE_INTERVAL_MS == 0)
+    tick_counter++;
+
+    /* Update millisecond counter (approximate, since we're running at ~100Hz) */
+    system_millis += 10;
+
+    /* Toggle LED every ~1 second (50 ticks * 10ms = 500ms, giving 1Hz blink rate) */
+    if (tick_counter % 50 == 0)
     {
         led_toggle_flag = 1;
     }
@@ -391,10 +414,11 @@ void sys_tick_handler(void)
 
 static void setup_systick(void)
 {
-    /* Setup SysTick to fire every 1ms for precise timing */
-    /* Using 72MHz system clock with external crystal */
-    systick_set_reload(SYSTEM_CLOCK_HZ / SYSTICK_FREQUENCY_HZ - 1);
-    systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
+    /* Setup SysTick similar to stable implementation */
+    /* Using AHB/8 clock source for more reliable operation */
+    systick_set_clocksource(STK_CSR_CLKSOURCE_AHB_DIV8);
+    /* At 72MHz, AHB/8 = 9MHz, so 99999 gives ~100Hz (10ms intervals) */
+    systick_set_reload(99999);
     systick_counter_enable();
     systick_interrupt_enable();
 }
@@ -410,9 +434,6 @@ int main(void)
     /* Set GPIO13 (PC13, LED pin) to 'output push-pull' */
     gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ,
                   GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-
-    /* Initialize system timing */
-    setup_systick();
 
     /* Initialize gamepad GPIO */
     setup_gpio();
@@ -437,7 +458,7 @@ int main(void)
         /* Handle USB events */
         usbd_poll(usbd_dev);
 
-        /* Handle LED blinking */
+        /* Handle LED blinking - only if SysTick is running */
         if (led_toggle_flag)
         {
             led_toggle_flag = 0;
@@ -447,17 +468,21 @@ int main(void)
         /* Read current gamepad state every loop iteration */
         update_gamepad_state(&report);
 
-        /* Send HID report immediately on state change OR every 5ms for turbo/keepalive */
-        uint8_t state_changed = (report.buttons != last_report.buttons);
-        uint8_t periodic_update = (system_millis - last_report_time >= 5);
-
-        if (state_changed || periodic_update)
+        /* Send HID report immediately on state change OR every 50ms for turbo/keepalive */
+        /* Only do this if SysTick is running (system_millis will be non-zero after first tick) */
+        if (system_millis > 0)
         {
-            last_report_time = system_millis;
-            last_report = report;
+            uint8_t state_changed = (report.buttons != last_report.buttons);
+            uint8_t periodic_update = (system_millis - last_report_time >= 50);
 
-            /* Send the report */
-            send_hid_report(&report);
+            if (state_changed || periodic_update)
+            {
+                last_report_time = system_millis;
+                last_report = report;
+
+                /* Send the report */
+                send_hid_report(&report);
+            }
         }
     }
 
