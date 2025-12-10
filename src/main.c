@@ -19,7 +19,7 @@ static void setup_systick(void);
 
 /* USB Device Descriptors - using pid.codes VID/PID */
 #define USB_VID 0x1209
-#define USB_PID 0x0001
+#define USB_PID 0x8B17 // Dedidicated to DendyJoystick project, https://github.com/pidcodes/pidcodes.github.com/blob/master/1209/8B17/index.md
 
 /* Button Pin Definitions */
 #define BUTTON_UP_PIN GPIO0      // PA0 - DPad Up
@@ -45,24 +45,38 @@ static void setup_systick(void);
 
 /* HID Report Descriptor for Gamepad with Digital Buttons Only */
 static const uint8_t hid_report_descriptor[] = {
-    0x05, 0x01, // Usage Page (Generic Desktop)
-    0x09, 0x05, // Usage (Game Pad)
-    0xA1, 0x01, // Collection (Application)
+    0x05,
+    0x01, // Usage Page (Generic Desktop)
+    0x09,
+    0x05, // Usage (Game Pad)
+    0xA1,
+    0x01, // Collection (Application)
 
     // Button Report (8 buttons)
-    0x05, 0x09, //   Usage Page (Button)
-    0x19, 0x01, //   Usage Minimum (Button 1)
-    0x29, 0x08, //   Usage Maximum (Button 8)
-    0x15, 0x00, //   Logical Minimum (0)
-    0x25, 0x01, //   Logical Maximum (1)
-    0x75, 0x01, //   Report Size (1 bit)
-    0x95, 0x08, //   Report Count (8 buttons)
-    0x81, 0x02, //   Input (Data,Var,Abs)
+    0x05,
+    0x09, //   Usage Page (Button)
+    0x19,
+    0x01, //   Usage Minimum (Button 1)
+    0x29,
+    0x08, //   Usage Maximum (Button 8)
+    0x15,
+    0x00, //   Logical Minimum (0)
+    0x25,
+    0x01, //   Logical Maximum (1)
+    0x75,
+    0x01, //   Report Size (1 bit)
+    0x95,
+    0x08, //   Report Count (8 buttons)
+    0x81,
+    0x02, //   Input (Data,Var,Abs)
 
     // Padding for button byte alignment
-    0x75, 0x08, //   Report Size (8 bits)
-    0x95, 0x01, //   Report Count (1)
-    0x81, 0x03, //   Input (Const,Var,Abs) - padding
+    0x75,
+    0x08, //   Report Size (8 bits)
+    0x95,
+    0x01, //   Report Count (1)
+    0x81,
+    0x03, //   Input (Const,Var,Abs) - padding
 
     0xC0, // End Collection
 };

@@ -73,7 +73,3 @@ Note two cuts on the PCB to disconnect TA and TB
 7. **To assemble** I had to make a few adjustments inside the original cover, but kept the looks:
 
 ![Assembled Joystick](img/final_result.png)
-
-## TODO
-
-Currently using VID/PID from pid.codes for test device, get real PID/VID
